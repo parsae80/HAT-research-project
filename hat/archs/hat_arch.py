@@ -7,6 +7,9 @@ from basicsr.utils.registry import ARCH_REGISTRY
 from basicsr.archs.arch_util import to_2tuple, trunc_normal_
 
 from einops import rearrange
+#edited
+from .sed import CLIP_Semantic_extractor
+
 
 def drop_path(x, drop_prob: float = 0., training: bool = False):
     """Drop paths (Stochastic Depth) per sample (when applied in main path of residual blocks).
@@ -768,6 +771,13 @@ class HAT(nn.Module):
         self.shift_size = window_size // 2
         self.overlap_ratio = overlap_ratio
 
+
+#edited
+        if use_semantic:
+            self.semantic_encoder = CLIP_Semantic_extractor(pretrained=True)
+        else:
+            self.semantic_encoder = None
+#edited              
         num_in_ch = in_chans
         num_out_ch = in_chans
         num_feat = 64
@@ -954,6 +964,8 @@ class HAT(nn.Module):
         # The original code is very time-consuming for large window size.
         attn_mask = self.calculate_mask(x_size).to(x.device)
         params = {'attn_mask': attn_mask, 'rpi_sa': self.relative_position_index_SA, 'rpi_oca': self.relative_position_index_OCA}
+        #edited
+        semantic = self.semantic_encoder(x) if self.semantic_encoder is not None else None
 
         x = self.patch_embed(x)
         if self.ape:
@@ -961,8 +973,8 @@ class HAT(nn.Module):
         x = self.pos_drop(x)
 
         for layer in self.layers:
-            x = layer(x, x_size, params)
-
+            # x = layer(x, x_size, params) edited parts
+            x = layer(x, x_size, params, semantic=semantic)
         x = self.norm(x)  # b seq_len c
         x = self.patch_unembed(x, x_size)
 
