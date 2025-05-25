@@ -617,10 +617,10 @@ class RHAG(nn.Module):
 
         self.patch_unembed = PatchUnEmbed(
             img_size=img_size, patch_size=patch_size, in_chans=0, embed_dim=dim, norm_layer=None)
-
-    def forward(self, x, x_size, params):
-        return self.patch_embed(self.conv(self.patch_unembed(self.residual_group(x, x_size, params), x_size))) + x
-
+#edited
+    def forward(self, x, x_size, params, semantic=None):
+        return self.patch_embed(self.conv(self.patch_unembed(self.residual_group(x, x_size, params, semantic=semantic), x_size))) + x
+#edited
 
 class PatchEmbed(nn.Module):
     r""" Image to Patch Embedding
