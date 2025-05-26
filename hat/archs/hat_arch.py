@@ -9,6 +9,7 @@ from basicsr.archs.arch_util import to_2tuple, trunc_normal_
 from einops import rearrange
 #edited
 from .sed import CLIP_Semantic_extractor
+from module_attention import ModifiedSpatialTransformer
 
 
 def drop_path(x, drop_prob: float = 0., training: bool = False):
@@ -257,7 +258,16 @@ class HAB(nn.Module):
             qk_scale=qk_scale,
             attn_drop=attn_drop,
             proj_drop=drop)
-
+#edited
+        self.semantic_attn = ModifiedSpatialTransformer(
+            in_channels=dim,
+            n_heads=num_heads,
+            d_head=dim // num_heads,
+            context_dim=semantic_dim,  # Set this to match your semantic feature size (e.g. 128 or 1024)
+            up_factor=2  # or what matches your scale
+        )
+#edited                     
+                     
         self.conv_scale = conv_scale
         self.conv_block = CAB(num_feat=dim, compress_ratio=compress_ratio, squeeze_factor=squeeze_factor)
 
@@ -279,11 +289,11 @@ class HAB(nn.Module):
         conv_x = self.conv_block(x.permute(0, 3, 1, 2))
 
         #edited 
-        if semantic is not None:
-        # Resize semantic to match conv_x shape
-            sem_feat = F.interpolate(semantic, size=conv_x.shape[-2:], mode='bilinear', align_corners=False)
-            conv_x = conv_x + sem_feat  # or use a more sophisticated fusion
-        #edited 
+        if self.semantic_transformer is not None and semantic is not None:
+            semantic_resized = F.interpolate(semantic, size=(h, w), mode='bilinear', align_corners=False)
+            sem_feat = self.semantic_transformer(semantic_resized, conv_feat)  # Output: (B, C, H, W)
+            conv_feat = conv_feat + sem_feat  
+
         conv_x = conv_x.permute(0, 2, 3, 1).contiguous().view(b, h * w, c)
 
         # cyclic shift
