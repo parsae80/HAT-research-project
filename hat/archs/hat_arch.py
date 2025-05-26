@@ -266,7 +266,7 @@ class HAB(nn.Module):
         mlp_hidden_dim = int(dim * mlp_ratio)
         self.mlp = Mlp(in_features=dim, hidden_features=mlp_hidden_dim, act_layer=act_layer, drop=drop)
 
-    def forward(self, x, x_size, rpi_sa, attn_mask):
+    def forward(self, x, x_size, rpi_sa, attn_mask, semantic= None):
         h, w = x_size
         b, _, c = x.shape
         # assert seq_len == h * w, "input feature has wrong size"
@@ -277,6 +277,13 @@ class HAB(nn.Module):
 
         # Conv_X
         conv_x = self.conv_block(x.permute(0, 3, 1, 2))
+
+        #edited 
+        if semantic is not None:
+        # Resize semantic to match conv_x shape
+            sem_feat = F.interpolate(semantic, size=conv_x.shape[-2:], mode='bilinear', align_corners=False)
+            conv_x = conv_x + sem_feat  # or use a more sophisticated fusion
+        #edited 
         conv_x = conv_x.permute(0, 2, 3, 1).contiguous().view(b, h * w, c)
 
         # cyclic shift
@@ -526,9 +533,9 @@ class AttenBlocks(nn.Module):
         else:
             self.downsample = None
 
-    def forward(self, x, x_size, params):
+    def forward(self, x, x_size, params, semantic=None):
         for blk in self.blocks:
-            x = blk(x, x_size, params['rpi_sa'], params['attn_mask'])
+            x = blk(x, x_size, params['rpi_sa'], params['attn_mask'], semantic = semantic)
 
         x = self.overlap_attn(x, x_size, params['rpi_oca'])
 
@@ -764,15 +771,16 @@ class HAT(nn.Module):
                  img_range=1.,
                  upsampler='',
                  resi_connection='1conv',
+                 use_semantic=False,
                  **kwargs):
         super(HAT, self).__init__()
 
         self.window_size = window_size
         self.shift_size = window_size // 2
         self.overlap_ratio = overlap_ratio
-
-
 #edited
+        self.use_semantic = use_semantic
+
         if use_semantic:
             self.semantic_encoder = CLIP_Semantic_extractor(pretrained=True)
         else:
@@ -987,7 +995,10 @@ class HAT(nn.Module):
         if self.upsampler == 'pixelshuffle':
             # for classical SR
             x = self.conv_first(x)
-            x = self.conv_after_body(self.forward_features(x)) + x
+#edited
+            semantic = self.semantic_encoder(x) if self.semantic_encoder is not None else None
+            x = self.conv_after_body(self.forward_features(x, semantic=semantic)) + x
+#edited
             x = self.conv_before_upsample(x)
             x = self.conv_last(self.upsample(x))
 
